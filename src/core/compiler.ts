@@ -1,11 +1,13 @@
 import { SyncHook } from '../hooks/index'
 import { toUnixPath, tryExtensions } from '../utils/index'
 import path from 'path'
-import { readFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import parser from '@babel/parser'
 import traverse from '@babel/traverse'
 import types from '@babel/types'
 import generator from '@babel/generator'
+import { genCode } from './gencode'
+import { writeFileAPI } from './apiWriteFile'
 
 const baseDir = toUnixPath(process.cwd())  //cmd在哪里执行的命令，basedir即是该目录
 class Compilation {
@@ -49,7 +51,7 @@ class Compilation {
         traverse(ast, {
             CallExpression: (nodePath: any) => {
                 const { node } = nodePath
-                if (node.callee.name === "require") { //require语句                    
+                if (node.callee.name === "require") { //require语句
                     const depModuleName = node.arguments[0].value //依赖的文件名称
                     const dirName = path.posix.dirname(modulePath) //当前的文件目录 **/src
                     let depModulePath = path.posix.join(dirName, depModuleName) //依赖模块的绝对路径 **/src/a
@@ -97,9 +99,25 @@ class Compilation {
             this.fileDependences.push(entryFilePath)  //依赖文件
             const entryModule = this.buildModule(entryName, entryFilePath) //开始编译
             this.modules.push(entryModule)
+            //所有模块编译完成后，根据依赖关系组装代码块，一般一个入口文件对应一个代码块
+            const chunk = { //该入口文件的打包好的块
+                name: entryName,
+                entryModule,
+                modules: this.modules.filter(module => module.names.includes(entryName))
+            }
+            this.chunks.push(chunk)
         }
+        //素有的依赖组装完成后，输出文本
+        this.chunks.forEach(chunk => {
+            const fileName = this.options.output.filename.replace("[name]", chunk.name)
+            this.assets[fileName] = genCode(chunk)
+        })
         //编译完成执行回调
-        callback()//钩子函数
+        callback(null, {
+            chunks: this.chunks,
+            modules: this.modules,
+            assets: this.assets
+        }, this.fileDependences)//钩子函数
     }
 }
 export class Compiler {
@@ -118,7 +136,15 @@ export class Compiler {
     }
     public run(callback: Function) {
         this.hooks.run.call() //开始编译
-        const onCompiled = () => {
+        const onCompiled = (err: any, stats: any, fileDependences: any) => {
+            //写入文件
+            for (const fileName in stats.assets) {
+                const filePath = path.join(baseDir, this.options.output.path, fileName)
+                writeFileAPI(filePath, stats.assets[fileName])
+            }
+            callback(err, {
+                toJSON: () => stats
+            })
             this.hooks.done.call()
         }
         this.compile(onCompiled)

@@ -1,4 +1,4 @@
-const c=require("./c")
+const c=require("./dev/c")
 function a(){
     
 }
