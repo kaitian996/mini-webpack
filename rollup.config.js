@@ -1,6 +1,7 @@
 import json from '@rollup/plugin-json'
 import ts from 'rollup-plugin-typescript2'
 import resolvePlugin from '@rollup/plugin-node-resolve'
+import commonjs from 'rollup-plugin-commonjs';
 import path from 'path'
 
 //工具函数，能拿到当前包下的文件
@@ -38,10 +39,15 @@ function createConfig(buildOptions, fileName, moduleName) {
             output,
             plugins: [
                 json(),
+                resolvePlugin(),
+                commonjs({
+                    include: 'node_modules/**',  // Default: undefined
+                    // if true then uses of `global` won't be dealt with by this plugin
+                    ignore: ['conditional-runtime-dependency']
+                }),
                 ts({
                     tsconfig: path.resolve(__dirname, 'tsconfig.json')
-                }),
-                resolvePlugin()
+                })
             ]
         }
     })
