@@ -1,7 +1,7 @@
 import { SyncHook } from '../hooks/index'
 import { toUnixPath, tryExtensions } from '../utils/index'
 import path from 'path'
-import { readFileSync, writeFileSync } from 'fs'
+import { readFileSync, watch } from 'fs'
 import parser from '@babel/parser'
 import traverse from '@babel/traverse'
 import types from '@babel/types'
@@ -142,6 +142,8 @@ export class Compiler {
                 const filePath = path.join(baseDir, this.options.output.path, fileName)
                 writeFileAPI(filePath, stats.assets[fileName])
             }
+            //监听文件
+            fileDependences.forEach((dependency: string) => watch(dependency, () => this.compile(onCompiled)))
             callback(err, {
                 toJSON: () => stats
             })
